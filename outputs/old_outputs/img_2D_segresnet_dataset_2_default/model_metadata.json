@@ -1,7 +1,0 @@
-{
-    "model_name": "segresnet_dataset_2_default",
-    "network_type": "segresnet",
-    "threshold": null,
-    "timestamp": "2025-03-30 17:00:48",
-    "device": "cuda"
-}

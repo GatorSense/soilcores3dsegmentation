@@ -8,6 +8,9 @@ outputs/*.nii.gz
 *.nii
 outputs/*.nii
 
+# Training, test and validation data
+data/
+
 # Images (excluding readme_figs)
 *.png
 images/*.png

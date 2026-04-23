@@ -10,24 +10,22 @@ Expected folder structure:
 ```
 datasets/
 └── soilcores/
-    ├── dataset_2.json
-    ├── training/
-    │   ├── imagesTr/   ← NIfTI volumes (.nii.gz)
-    │   └── labelsTr/   ← binary NIfTI labels (.nii.gz)
-    └── test/
+    ├── training_model_data.json
+    └── data/
+        ├── training/
+        │   ├── images/   ← NIfTI volumes (.nii.gz)
+        │   └── labels/   ← binary NIfTI labels (.nii.gz)
+        └── validation/
 ```
 
-The JSON file (`dataset_2.json`) should follow this structure:
+The JSON file (`training_model_data.json`) should follow this structure:
 ```json
 {
   "training": [
-    {"image": "training/imagesTr/C1216.nii.gz", "label": "training/labelsTr/C1216.nii.gz"}
+    {"image": "data/training/images/C1216.nii.gz", "label": "data/training/labels/C1216.nii.gz"}
   ],
-  "validation": [
-    {"image": "training/imagesTr/S1919.nii.gz", "label": "training/labelsTr/S1919.nii.gz"}
-  ],
-  "test": [
-    {"image": "test/C2003.nii.gz"}
+  "valmodel": [
+    {"image": "data/training/images/S1919.nii.gz", "label": "data/training/labels/S1919.nii.gz"}
   ]
 }
 ```
@@ -43,8 +41,8 @@ python train.py [options]
 | Argument | Default | Description |
 |---|---|---|
 | `--net` | `unet` | Architecture: `unet`, `unetr`, `dynunet`, `segresnet` |
-| `--data-dir` | `../datasets/soilcores` | Path to dataset folder containing the JSON file |
-| `--split-json` | `dataset_2.json` | Dataset split JSON filename |
+| `--data-dir` | `data` | Path to dataset folder containing the JSON file |
+| `--split-json` | `training_model_data.json` | Dataset split JSON filename |
 | `--output-dir` | `models` | Directory for checkpoints, CSVs, and plots |
 | `--max-iter` | `10000` | Total number of training steps |
 | `--eval-num` | `100` | Validation frequency (steps) |

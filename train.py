@@ -31,12 +31,13 @@ INTENSITY_MIN, INTENSITY_MAX = -175, 250
 PIXDIM = (1.5, 1.5, 2.0)
 
 
-def build_transforms():
-    def pad_to_patch(data):
-        data["image"] = F.pad(data["image"], (3, 3, 8, 8, 15, 15), "constant", 0)
-        data["label"] = F.pad(data["label"], (3, 3, 8, 8, 15, 15), "constant", 0)
-        return data
+def pad_to_patch(data):
+    data["image"] = F.pad(data["image"], (3, 3, 8, 8, 15, 15), "constant", 0)
+    data["label"] = F.pad(data["label"], (3, 3, 8, 8, 15, 15), "constant", 0)
+    return data
 
+
+def build_transforms():
     shared = [
         LoadImaged(keys=["image", "label"]),
         EnsureChannelFirstd(keys=["image", "label"]),
@@ -252,10 +253,10 @@ def plot_results(epoch_loss_values, metric_values, eval_steps, save_path):
 def main():
     parser = argparse.ArgumentParser(description="Train a segmentation model on soil core CT data.")
     parser.add_argument("--net", default="unet", choices=["unet", "unetr", "dynunet", "segresnet"])
-    parser.add_argument("--data-dir", default=os.path.join("..", "datasets", "soilcores"))
-    parser.add_argument("--split-json", default="dataset_2.json")
+    parser.add_argument("--data-dir", default="data")
+    parser.add_argument("--split-json", default="dataset.json")
     parser.add_argument("--output-dir", default="models")
-    parser.add_argument("--max-iter", type=int, default=10000)
+    parser.add_argument("--max-iter", type=int, default=1000)
     parser.add_argument("--eval-num", type=int, default=100)
     parser.add_argument("--lr", type=float, default=1e-2)
     parser.add_argument("--weight-decay", type=float, default=1e-6)
@@ -278,7 +279,7 @@ def main():
 
     datasets_json = os.path.join(args.data_dir, args.split_json)
     datalist = load_decathlon_datalist(datasets_json, True, "training")
-    val_files = load_decathlon_datalist(datasets_json, True, "validation")
+    val_files = load_decathlon_datalist(datasets_json, True, "valmodel")
 
     train_ds = CacheDataset(
         data=datalist, transform=train_transforms, cache_num=24, cache_rate=1.0, num_workers=args.num_workers
