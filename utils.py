@@ -28,6 +28,7 @@ from scipy.stats import pearsonr, spearmanr
 
 # Model configuration mapping
 MODEL_CONFIGS = {
+    'unet_dataset': ('unet', 'best_metric_modelunet_dataset.pth'),
     'unet_dataset_2_default': ('unet', 'best_metric_modelunet_dataset_2_default.pth'),
     'unet_dataset_2_100k': ('unet', 'best_metric_modelunet_dataset_2_100k.pth'),
     'segresnet_dataset_2_default': ('segresnet', 'best_metric_modelsegresnet_dataset_2_default.pth'),

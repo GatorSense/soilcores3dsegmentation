@@ -21,7 +21,7 @@ OUTPUTS_DIR = 'outputs'
 
 # Map model file to display name and model_name for runsegmentation
 MODEL_OPTIONS = [
-    ('best_metric_modelunet_dataset_2_default.pth', 'UNet (Default)', 'unet_dataset_2_default', 'unet'),
+    ('best_metric_modelunet_dataset.pth', 'UNet (Default)', 'unet_dataset', 'unet'),
     ('best_metric_modelunet_dataset_2_100k.pth', 'UNet (100k)', 'unet_dataset_2_100k', 'unet'),
     ('best_metric_modelsegresnet_dataset_2_default.pth', 'SegResNet', 'segresnet_dataset_2_default', 'segresnet'),
     ('best_metric_modeldynunet_dataset_2_100k.pth', 'DynUNet', 'dynunet_dataset_2_100k', 'dynunet'),
