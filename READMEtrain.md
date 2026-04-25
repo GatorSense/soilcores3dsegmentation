@@ -10,7 +10,7 @@ Expected folder structure:
 ```
 datasets/
 └── soilcores/
-    ├── training_model_data.json
+    ├── dataset.json
     └── data/
         ├── training/
         │   ├── images/   ← NIfTI volumes (.nii.gz)
@@ -18,7 +18,7 @@ datasets/
         └── validation/
 ```
 
-The JSON file (`training_model_data.json`) should follow this structure:
+The JSON file (`dataset.json`) should follow this structure:
 ```json
 {
   "training": [
@@ -42,7 +42,7 @@ python train.py [options]
 |---|---|---|
 | `--net` | `unet` | Architecture: `unet`, `unetr`, `dynunet`, `segresnet` |
 | `--data-dir` | `data` | Path to dataset folder containing the JSON file |
-| `--split-json` | `training_model_data.json` | Dataset split JSON filename |
+| `--split-json` | `dataset.json` | Dataset split JSON filename |
 | `--output-dir` | `models` | Directory for checkpoints, CSVs, and plots |
 | `--max-iter` | `10000` | Total number of training steps |
 | `--eval-num` | `100` | Validation frequency (steps) |
