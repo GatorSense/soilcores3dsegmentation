@@ -39,6 +39,17 @@ def sanitize_filename_part(value):
     return sanitized or 'feature'
 
 
+def plot_bland_altman(ax, gt, pred, label, color):
+    gt = np.asarray(gt, dtype=float)
+    pred = np.asarray(pred, dtype=float)
+    means = (gt + pred) / 2
+    diffs = pred - gt
+    bias = np.mean(diffs)
+    loa = 1.96 * np.std(diffs, ddof=1)
+    ax.scatter(means, diffs, alpha=0.6, label=label, color=color)
+    return bias, loa
+
+
 # Load the prediction data
 # model_list = ["dynunet", "segresnet", "unet", "unet100k", "unetr"]
 model_list = [{"model": "dynunet", "feat_pred": "Root Length Diameter Range 3 (px)"},
@@ -150,6 +161,35 @@ for model_entry in model_list:
         bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.7),
     )
     ax.legend()
+
+    # Bland-Altman plot
+    fig_ba, ax_ba = plt.subplots(figsize=(8, 6))
+    bias_test, loa_test = plot_bland_altman(ax_ba, x, y, label="Test", color="tab:blue")
+    bias_val, loa_val = plot_bland_altman(ax_ba, x_val, y_val, label="Validation", color="tab:orange")
+    # Draw lines for the test split (primary reference)
+    ax_ba.axhline(bias_test, color="tab:blue", linestyle="--", linewidth=1)
+    ax_ba.axhline(bias_test + loa_test, color="tab:blue", linestyle=":", linewidth=1)
+    ax_ba.axhline(bias_test - loa_test, color="tab:blue", linestyle=":", linewidth=1)
+    ax_ba.axhline(0, color="black", linewidth=0.8)
+    ba_text = (
+        f"Test:  bias={bias_test:.3f}, LoA=[{bias_test - loa_test:.3f}, {bias_test + loa_test:.3f}]\n"
+        f"Val:   bias={bias_val:.3f}, LoA=[{bias_val - loa_val:.3f}, {bias_val + loa_val:.3f}]"
+    )
+    ax_ba.text(
+        0.05, 0.95, ba_text,
+        transform=ax_ba.transAxes,
+        fontsize=9, verticalalignment="top",
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.7),
+    )
+    ax_ba.set_xlabel("Mean of GT and Pred")
+    ax_ba.set_ylabel("Pred − GT")
+    ax_ba.set_title(f"Bland-Altman: {feat_gt} vs {feat_pred} ({model_name})")
+    ax_ba.legend()
+    os.makedirs("outputs", exist_ok=True)
+    ba_path = f"outputs/bland_altman_{model_name}_{sanitize_filename_part(feat_gt)}.png"
+    fig_ba.savefig(ba_path, dpi=150, bbox_inches="tight")
+    plt.close(fig_ba)
+    print(f"Saved Bland-Altman plot: {ba_path}")
 
 plt.show()
 
