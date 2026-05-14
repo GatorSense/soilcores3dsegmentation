@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import re
+from sklearn.linear_model import LinearRegression
 
 # Load the GT data
 GT_PATH = "gt/CoresGT_MNHT.csv"
@@ -39,6 +40,30 @@ def sanitize_filename_part(value):
     return sanitized or 'feature'
 
 
+def plot_scatter_calibrated(gt, pred_calib, title, save_path):
+    x = np.asarray(gt, dtype=float)
+    y = np.asarray(pred_calib, dtype=float)
+
+    fig, ax = plt.subplots(figsize=(12, 8))
+    ax.scatter(x, y, alpha=0.7, s=100, label="Data points")
+    ax.grid(True)
+    ax.set_xlabel("Ground Truth", fontsize=24)
+    ax.set_ylabel("Predicted (calibrated)", fontsize=24)
+    ax.set_title(title, fontsize=24)
+
+    reg = LinearRegression().fit(x.reshape(-1, 1), y)
+    x_line = np.linspace(x.min(), x.max(), 100)
+    y_line = reg.predict(x_line.reshape(-1, 1))
+    ax.plot(x_line, y_line, "r--", linewidth=3, label=f"Fit (slope={reg.coef_[0]:.2f})")
+
+    ax.legend(fontsize=18)
+    ax.tick_params(axis="both", labelsize=16)
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved scatter plot: {save_path}")
+
+
 def plot_bland_altman(ax, gt, pred, label, color):
     gt = np.asarray(gt, dtype=float)
     pred = np.asarray(pred, dtype=float)
@@ -64,8 +89,18 @@ for model_entry in model_list:
     feat_pred = model_entry["feat_pred"]
     df_gt = df_gt_base.copy()
     df_gt_val = df_gt_val_base.copy()
-    df_pred = pd.read_csv(f"outputs/prediction_{model_name}_col_stl.csv")
-    df_pred_val = pd.read_csv(f"outputs/prediction_{model_name}_mnht.csv")
+    df_pred = pd.read_csv(f"outputs/prediction_{model_name}_mnht.csv")
+    df_pred_val = pd.read_csv(f"outputs/prediction_{model_name}_col_stl.csv")
+
+    print(f"\n--- {model_name} merge diagnostics ---")
+    print(f"  df_gt_base columns : {list(df_gt_base.columns)}")
+    print(f"  df_gt_val  columns : {list(df_gt_val_base.columns)}")
+    print(f"  df_pred    columns : {list(df_pred.columns)}")
+    print(f"  df_pred_val columns: {list(df_pred_val.columns)}")
+    print(f"  df_gt_base ID sample  : {df_gt_base.iloc[:3, 0].tolist()}")
+    print(f"  df_gt_val  ID sample  : {df_gt_val_base.iloc[:3, 0].tolist()}")
+    print(f"  df_pred    soil_core sample  : {df_pred['soil_core'].iloc[:3].tolist() if 'soil_core' in df_pred.columns else 'COLUMN MISSING'}")
+    print(f"  df_pred_val soil_core sample : {df_pred_val['soil_core'].iloc[:3].tolist() if 'soil_core' in df_pred_val.columns else 'COLUMN MISSING'}")
 
     # Align GT/pred rows by core ID before metric computations.
     pred_rename = {c: f"pred_{c}" for c in df_pred.columns if c != "soil_core"}
@@ -99,21 +134,38 @@ for model_entry in model_list:
     # Sum of 0<.L.<=1.000000  Sum of 1.0000000<.L.<=2.0000000	Sum of 2.0000000<.L.<=3.0000000	Sum of 3.0000000<.L.<=4.0000000	Sum of .L.>4.0000000
     # Use the same normalization convention as SubsetSelection.py:
     # standardize on the full matched split, then evaluate on selected subset.
-    xmean, ymean = df_m_full[feat_gt].mean(), df_m_full[f"pred_{feat_pred}"].mean()
-    xstd, ystd = df_m_full[feat_gt].std(), df_m_full[f"pred_{feat_pred}"].std()
-    x_valmean, y_valmean = df_s[feat_gt].mean(), df_s[f"pred_{feat_pred}"].mean()
-    x_valstd, y_valstd = df_s[feat_gt].std(), df_s[f"pred_{feat_pred}"].std()
+    # MNHT: normalize using a random subsample of 10 cores from the full split
+    mnht_subsample_gt   = df_m_full[feat_gt].sample(n=min(10, len(df_m_full)), random_state=42)
+    mnht_subsample_pred = df_m_full[f"pred_{feat_pred}"].sample(n=min(10, len(df_m_full)), random_state=42)
+    xmean, xstd = mnht_subsample_gt.mean(),   mnht_subsample_gt.std()
+    ymean, ystd = mnht_subsample_pred.mean(), mnht_subsample_pred.std()
+    # COL_STL: normalize using all cores
+    x_valmean, x_valstd = df_s[feat_gt].mean(),               df_s[feat_gt].std()
+    y_valmean, y_valstd = df_s[f"pred_{feat_pred}"].mean(),   df_s[f"pred_{feat_pred}"].std()
 
-    x = (df_m[feat_gt] - xmean) / xstd
-    y = (df_m[f"pred_{feat_pred}"] - ymean) / ystd
-    x_val = (df_s[feat_gt] - x_valmean) / x_valstd
-    y_val = (df_s[f"pred_{feat_pred}"] - y_valmean) / y_valstd
-    # x_val = x_val * xstd + xmean
-    #y_val = y_val * ystd + ymean
-    # x = x*xstd + xmean
-    #y = y*ystd + ymean
-    # x_val = x_val*x_valstd + x_valmean
-    #y_val = y_val*y_valstd + y_valmean
+    # Exclude calibration cores from evaluation to avoid data leakage
+    calibration_cores = set(df_m_full.loc[mnht_subsample_gt.index, "soil_core"])
+    df_m_eval = df_m[~df_m["soil_core"].isin(calibration_cores)].reset_index(drop=True)
+
+    x     = (df_m_eval[feat_gt]                  - xmean)     / xstd
+    y     = (df_m_eval[f"pred_{feat_pred}"]      - ymean)     / ystd
+    x_val = (df_s[feat_gt]                       - x_valmean) / x_valstd
+    y_val = (df_s[f"pred_{feat_pred}"]           - y_valmean) / y_valstd
+
+    print(f"  df_m_full rows: {len(df_m_full)}  |  df_m rows: {len(df_m)}  |  df_s rows: {len(df_s)}")
+    if df_m_full.empty or df_s.empty:
+        print(f"  [SKIP] One or more merged DataFrames are empty — check column names and core IDs above.")
+        continue
+
+    print(f"\n--- {model_name} normalization diagnostics ---")
+    print(f"  MNHT subsample (n={len(mnht_subsample_gt)}): gt mean={xmean:.4f}, std={xstd:.4f} | pred mean={ymean:.4f}, std={ystd:.4f}")
+    print(f"  Calibration cores excluded: {sorted(calibration_cores)}")
+    print(f"  MNHT df_m_eval GT (n={len(df_m_eval)}): mean={df_m_eval[feat_gt].mean():.4f}, std={df_m_eval[feat_gt].std():.4f}")
+    print(f"  COL_STL GT        (n={len(df_s)}):      mean={x_valmean:.4f}, std={x_valstd:.4f}")
+    print(f"  x   (test GT normalized)  : mean={float(x.mean()):.4f}, std={float(x.std()):.4f}")
+    print(f"  y   (test pred normalized): mean={float(y.mean()):.4f}, std={float(y.std()):.4f}")
+    print(f"  x_val (val GT normalized) : mean={float(x_val.mean()):.4f}, std={float(x_val.std()):.4f}")
+    print(f"  y_val (val pred normalized): mean={float(y_val.mean()):.4f}, std={float(y_val.std()):.4f}")
 
     pearson_test, spearman_test, r2_test, mse_test, me_test, sde_test = compute_metrics(x, y)
     pearson_val, spearman_val, r2_val, mse_val, me_val, sde_val = compute_metrics(x_val, y_val)
@@ -183,13 +235,42 @@ for model_entry in model_list:
     )
     ax_ba.set_xlabel("Mean of GT and Pred")
     ax_ba.set_ylabel("Pred − GT")
-    ax_ba.set_title(f"Bland-Altman: {feat_gt} vs {feat_pred} ({model_name})")
+    ax_ba.set_title(f"Bland-Altman: {model_name}")
     ax_ba.legend()
     os.makedirs("outputs", exist_ok=True)
     ba_path = f"outputs/bland_altman_{model_name}_{sanitize_filename_part(feat_gt)}.png"
     fig_ba.savefig(ba_path, dpi=150, bbox_inches="tight")
     plt.close(fig_ba)
     print(f"Saved Bland-Altman plot: {ba_path}")
+
+    # Denormalize predictions back to GT scale (calibrated)
+    # y/y_val are normalized by prediction stats; map them into GT units via GT stats
+    y_calib     = y.to_numpy()     * xstd     + xmean
+    y_val_calib = y_val.to_numpy() * x_valstd + x_valmean
+    x_orig      = df_m_eval[feat_gt].to_numpy()
+    x_val_orig  = df_s[feat_gt].to_numpy()
+
+    os.makedirs("outputs", exist_ok=True)
+    plot_scatter_calibrated(
+        x_orig, y_calib,
+        title=f"{model_name} — MNHT",
+        save_path=f"outputs/scatter_{model_name}_mnht_{sanitize_filename_part(feat_gt)}.png",
+    )
+    plot_scatter_calibrated(
+        x_val_orig, y_val_calib,
+        title=f"{model_name} — COL_STL",
+        save_path=f"outputs/scatter_{model_name}_col_stl_{sanitize_filename_part(feat_gt)}.png",
+    )
+
+    # Per-core deviation for COL/STL
+    df_dev = df_s[["soil_core", feat_gt]].copy()
+    df_dev["pred_calibrated"] = y_val_calib
+    df_dev["abs_error"] = np.abs(df_dev["pred_calibrated"] - df_dev[feat_gt])
+    df_dev = df_dev.sort_values("abs_error", ascending=False).reset_index(drop=True)
+    worst = df_dev.iloc[0]
+    print(f"\n  [{model_name}] COL/STL worst deviation:")
+    print(f"    core={worst['soil_core']}  GT={worst[feat_gt]:.3f}  pred={worst['pred_calibrated']:.3f}  |error|={worst['abs_error']:.3f}")
+    print(df_dev.to_string(index=False))
 
 plt.show()
 

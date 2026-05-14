@@ -105,7 +105,6 @@ def build_model(net_type: str, device: torch.device) -> torch.nn.Module:
             hidden_size=768,
             mlp_dim=3072,
             num_heads=12,
-            pos_embed="perceptron",
             norm_name="instance",
             res_block=True,
             dropout_rate=0.2,

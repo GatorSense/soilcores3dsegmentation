@@ -77,6 +77,11 @@ class NiftiViewer(QWidget):
         self.save_btn.setEnabled(False)
         btn_layout.addWidget(self.save_btn)
 
+        self.save_nii_btn = QPushButton('Save Thresholded NIfTI')
+        self.save_nii_btn.clicked.connect(self.save_thresholded_nifti)
+        self.save_nii_btn.setEnabled(False)
+        btn_layout.addWidget(self.save_nii_btn)
+
         self.axis_slider = QSlider(Qt.Horizontal)
         self.axis_slider.setMinimum(0)
         self.axis_slider.setMaximum(2)
@@ -290,6 +295,7 @@ class NiftiViewer(QWidget):
             self.input_path = file_path
             self.run_btn.setEnabled(True)
             self.save_btn.setEnabled(True)
+            self.save_nii_btn.setEnabled(True)
             self.seg_output_path = None
             # Reset thresholds when loading new file
             self.reset_thresholds()
@@ -534,6 +540,48 @@ class NiftiViewer(QWidget):
         except Exception as e:
             QMessageBox.critical(self, 'Save Error', f'Error saving images: {str(e)}')
 
+    def save_thresholded_nifti(self):
+        """Save the current thresholded binary data as a .nii.gz file."""
+        if self.original_data is None or self.nii_img is None:
+            QMessageBox.warning(self, 'No Data', 'Please load a NIfTI file first.')
+            return
+
+        if hasattr(self, 'input_path') and self.input_path:
+            base_name = os.path.basename(self.input_path)
+            if base_name.lower().endswith('.nii.gz'):
+                base_name = base_name[:-7]
+            elif base_name.lower().endswith('.nii'):
+                base_name = base_name[:-4]
+        else:
+            base_name = 'thresholded'
+
+        default_name = f"{base_name}_thresholded.nii.gz"
+        save_path, _ = QFileDialog.getSaveFileName(
+            self, 'Save Thresholded NIfTI', default_name, 'NIfTI Files (*.nii.gz *.nii)'
+        )
+        if not save_path:
+            return
+
+        try:
+            data_min = self.original_data.min()
+            data_max = self.original_data.max()
+            lower_val = data_min + (data_max - data_min) * self.lower_threshold_slider.value() / 100
+            upper_val = data_min + (data_max - data_min) * self.upper_threshold_slider.value() / 100
+
+            thresholded = np.copy(self.original_data)
+            thresholded[thresholded < lower_val] = 0
+            thresholded[thresholded > upper_val] = 0
+            binary_data = np.where(thresholded > 0, 1, 0).astype(np.uint8)
+
+            new_img = nib.Nifti1Image(binary_data, self.nii_img.affine, self.nii_img.header)
+            nib.save(new_img, save_path)
+
+            QMessageBox.information(self, 'Save Complete',
+                                    f'Saved thresholded NIfTI to:\n{save_path}\n\n'
+                                    f'Threshold range: {lower_val:.2f} – {upper_val:.2f}')
+        except Exception as e:
+            QMessageBox.critical(self, 'Save Error', f'Error saving NIfTI: {str(e)}')
+
     def analyze_root_topology(self):
         """Analyze root topology from 2D images and generate CSV with bar plot"""
         if not self.selected_folders:
@@ -738,8 +786,9 @@ class NiftiViewer(QWidget):
             # Reset thresholds for the new segmented data
             self.reset_thresholds()
             
-            # Enable save button after segmentation
+            # Enable save buttons after segmentation
             self.save_btn.setEnabled(True)
+            self.save_nii_btn.setEnabled(True)
             
             QMessageBox.information(self, 'Segmentation Complete', f'Segmentation complete. Output saved to {output_path}')
             
